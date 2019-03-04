@@ -1,20 +1,22 @@
+import json
 import os
 from time import sleep
 
+import falcon
 import pychrome
 
 
-class Restart():
+class Restart:
     def onContent(self, **kwargs) -> None:
         if self.current_page == 'login':
             print("Logging in")
             # set Password
-            self.tab.Runtime.evaluate(expression=self.__set_password(self.router_password), returnByValue=True,
-                                      awaitPromise=True)
+            self.tab.Runtime.evaluate(expression=self.__set_password(self.router_password), returnByValue=False,
+                                      awaitPromise=False)
             sleep(1)
 
             # trigger login
-            self.tab.Runtime.evaluate(expression=self.__trigger_login(), returnByValue=False, awaitPromise=True)
+            self.tab.Runtime.evaluate(expression=self.__trigger_login(), returnByValue=False, awaitPromise=False)
 
             sleep(1)
 
@@ -27,15 +29,15 @@ class Restart():
 
             sleep(1)
             # trigger restart popup
-            self.tab.Runtime.evaluate(expression=self.__trigger_restart_popup(), returnByValue=False, awaitPromise=True)
+            self.tab.Runtime.evaluate(expression=self.__trigger_restart_popup(), returnByValue=False, awaitPromise=False)
             sleep(1)
 
             self.current_page = 'restarting'
-            self.tab.Runtime.evaluate(expression=self._trigger_restart(), returnByValue=False, awaitPromise=True)
+            self.tab.Runtime.evaluate(expression=self._trigger_restart(), returnByValue=False, awaitPromise=False)
             return
 
     def execute(self):
-        self.browser = pychrome.Browser(url="http://127.0.0.1:9222")
+        self.browser = pychrome.Browser(url=self.chromium_url)
 
         self.tab = self.browser.new_tab()
         self.tab.start()
@@ -55,10 +57,11 @@ class Restart():
         self.tab.stop()
         self.browser.close_tab(self.tab)
 
-    def __init__(self, router_ip, router_password):
+    def __init__(self, router_ip, router_password, chromium_url):
         self.router_ip = router_ip
         self.router_password = router_password
         self.current_page = 'login'
+        self.chromium_url = chromium_url
         self.browser = None
         self.tab = None
 
@@ -75,9 +78,23 @@ class Restart():
         return "document.getElementById('PAGE_RESTART_POPUP_APPLY').click()"
 
 
-if __name__ == '__main__':
-    router_ip = os.environ.get('IP', '192.168.0.1')
-    router_password = os.environ.get('PASSWORD')
+class RestartRouterResponse:
+    def on_get(self, req, resp):
+        """Handles GET requests"""
+        try:
+            router_ip = os.environ.get('IP', '192.168.0.1')
+            router_password = os.environ.get('PASSWORD')
 
-    restart = Restart(router_ip, router_password)
-    restart.execute()
+            # using localhost for non-docker development
+            chromium_url = os.environ.get('CHROMIUM_URL', '127.0.0.1:9200')
+
+            restart = Restart(router_ip, router_password, chromium_url)
+            restart.execute()
+
+            resp.body = json.dumps(dict(finished=True))
+        except Exception as e:
+            resp.body = json.dumps(dict(error=e))
+
+
+api = falcon.API()
+api.add_route('/restart', RestartRouterResponse())

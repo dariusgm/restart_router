@@ -1,0 +1,18 @@
+version: '2'
+
+
+services:
+  api:
+    build: ./api
+    ports:
+      - "52000:52000/tcp"
+    env_file: api/api.env
+    depends_on:
+    - chromium
+
+  chromium:
+    build: ./chromium
+    ports:
+      - "9222:9222/tcp"
+    cap_add:
+      - SYS_ADMIN
